@@ -1,0 +1,54 @@
+version: '2'
+
+services:
+  mongo:
+    image: mongo:3.2
+    hostname: 'mongo'
+    volumes:
+     - ./db/data:/data/db
+     - ./db/dump:/dump
+    command: mongod --smallfiles --oplogSize 128 --replSet rs0
+
+  mongo-init-replica:
+    image: mongo:3.2
+    command: 'mongo mongo/rocketchat --eval "rs.initiate({ _id: ''rs0'', members: [ { _id: 0, host: ''localhost:27017'' } ]})"'
+    links:
+      - mongo:mongo
+
+  rocketchat:
+    image: rocketchat/rocket.chat:latest
+    hostname: 'rocketchat'
+    volumes:
+      - ./rocketchat/uploads:/app/uploads
+    environment:
+      - PORT=3000
+      - ROOT_URL=http://localhost:3000
+      - MONGO_URL=mongodb://mongo:27017/rocketchat
+      - MONGO_OPLOG_URL=mongodb://mongo:27017/local
+    links:
+      - mongo:mongo
+    ports:
+      - 3000:3000
+
+  hubot:
+    image: rocketchat/hubot-rocketchat:latest
+    hostname: "hubot"
+    environment:
+      - ROCKETCHAT_URL=rocketchat:3000
+      - ROCKETCHAT_ROOM=general
+      - ROCKETCHAT_USER=rocket.cat
+      - ROCKETCHAT_PASSWORD=12345
+      - ROCKETCHAT_AUTH=password
+      - BOT_NAME=Rocket.Cat
+      - LISTEN_ON_ALL_PUBLIC=true
+      - EXTERNAL_SCRIPTS=hubot-help,hubot-seen,hubot-links,hubot-diagnostics,hubot-rocketchat-gitlab
+      - GITLAB_URL=https://gitlab.com/api/v3/
+      - GITLAB_TOKEN=
+      - GITLAB_RECORD_LIMIT=1000
+
+    links:
+      - rocketchat:rocketchat
+    volumes:
+      - ./hubot/scripts:/home/hubot/scripts
+    ports:
+      - 3001:3001
